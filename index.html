@@ -385,19 +385,19 @@
       <div class="chart-wrap"><canvas id="chartDecade"></canvas></div>
     </div>
     <div class="card">
-      <h3>Directors You Watch Most</h3>
-      <div class="chart-wrap"><canvas id="chartDirectors"></canvas></div>
-    </div>
-    <div class="card">
       <h3>How Current Is Your Taste</h3>
       <div class="chart-wrap"><canvas id="chartRecency"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Highest-Rated Directors</h3>
+      <div class="chart-wrap"><canvas id="chartDirectorRating"></canvas></div>
     </div>
     <div class="card">
       <h3>Rating vs. Release Year</h3>
       <div class="chart-wrap"><canvas id="chartYearScatter"></canvas></div>
     </div>
     <div class="card">
-      <h3>Auteur vs. Collaborative</h3>
+      <h3>Solo vs. Collaborative</h3>
       <div class="chart-wrap"><canvas id="chartAuteur"></canvas></div>
     </div>
   </div>
@@ -406,7 +406,7 @@
   <p class="section-desc">All logged films, most recent first.</p>
   <table>
     <thead>
-      <tr><th>Title</th><th>Director</th><th>Watched</th><th>Released</th><th>Runtime</th><th>Rating</th><th></th></tr>
+      <tr><th>Title</th><th>Director</th><th>Writer</th><th>Watched</th><th>Released</th><th>Runtime</th><th>Rating</th><th></th></tr>
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
@@ -426,7 +426,7 @@ let films = [];
 // Find them in Supabase: Project Settings -> API
 // ============================================
 const SUPABASE_URL = 'https://eawzxcshuzcfyubxmrun.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhd3p4Y3NodXpjZnl1YnhtcnVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNjQ0NzYsImV4cCI6MjA5OTc0MDQ3Nn0.4xP-tE2Rdp0ErL2XtbT8y4l3bntpMOyvO7DcL10d0D8';
+const SUPABASE_ANON_KEY = 'YeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhd3p4Y3NodXpjZnl1YnhtcnVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNjQ0NzYsImV4cCI6MjA5OTc0MDQ3Nn0.4xP-tE2Rdp0ErL2XtbT8y4l3bntpMOyvO7DcL10d0D8';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let isLoggedIn = false;
@@ -546,8 +546,8 @@ function renderAll(){
   renderRatingDist();
   renderTop();
   renderDecade();
-  renderDirectors();
   renderRecency();
+  renderDirectorRating();
   renderYearScatter();
   renderAuteur();
 }
@@ -572,8 +572,9 @@ function renderTable(){
   const sorted = films.slice().sort((a,b)=> (b.watchOrder||0)-(a.watchOrder||0));
   document.getElementById('tableBody').innerHTML = sorted.map(f => `
     <tr>
-      <td title="${f.writer ? 'Writer: '+escapeHtml(f.writer) : ''}">${escapeHtml(f.title)}</td>
+      <td>${escapeHtml(f.title)}</td>
       <td>${escapeHtml(f.director || '—')}</td>
+      <td>${escapeHtml(f.writer || '—')}</td>
       <td>${MONTH_LABEL(f.monthWatched)}</td>
       <td>${f.yearReleased}</td>
       <td>${f.runtime}m</td>
@@ -737,48 +738,6 @@ function renderDecade(){
   });
 }
 
-function renderDirectors(){
-  const counts = {};
-  films.forEach(f=>{
-    if(!f.director) return;
-    // films can list multiple directors separated by commas — credit each one
-    f.director.split(',').map(d=>d.trim()).filter(Boolean).forEach(name=>{
-      counts[name] = (counts[name]||0)+1;
-    });
-  });
-  const entries = Object.entries(counts)
-    .filter(([,c]) => c >= 2)
-    .sort((a,b)=> b[1]-a[1])
-    .slice(0,8);
-
-  destroy('directors');
-  const canvas = document.getElementById('chartDirectors');
-  if(entries.length === 0){
-    charts.directors = new Chart(canvas, {
-      type:'bar',
-      data:{ labels:['No repeats yet'], datasets:[{ data:[0], backgroundColor: palette.teal }]},
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
-    });
-    return;
-  }
-  charts.directors = new Chart(canvas, {
-    type:'bar',
-    data:{
-      labels: entries.map(e=>e[0]),
-      datasets:[{ data: entries.map(e=>e[1]), backgroundColor: palette.teal, borderRadius:4 }]
-    },
-    options:{
-      indexAxis:'y',
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ beginAtZero:true, ticks:{stepSize:1, color:palette.muted}, grid:{color:palette.gridLine} },
-        y:{ grid:{display:false}, ticks:{color:palette.cream} }
-      }
-    }
-  });
-}
-
 function renderRecency(){
   const thisYear = new Date().getFullYear();
   const buckets = [
@@ -808,6 +767,50 @@ function renderRecency(){
   });
 }
 
+function renderDirectorRating(){
+  const stats = {};
+  films.forEach(f=>{
+    if(!f.director) return;
+    f.director.split(',').map(d=>d.trim()).filter(Boolean).forEach(name=>{
+      if(!stats[name]) stats[name] = { total:0, count:0 };
+      stats[name].total += f.rating;
+      stats[name].count += 1;
+    });
+  });
+  const entries = Object.entries(stats)
+    .filter(([,s]) => s.count >= 2)
+    .map(([name,s]) => [name, s.total/s.count])
+    .sort((a,b)=> b[1]-a[1])
+    .slice(0,8);
+
+  destroy('directorRating');
+  const canvas = document.getElementById('chartDirectorRating');
+  if(entries.length === 0){
+    charts.directorRating = new Chart(canvas, {
+      type:'bar',
+      data:{ labels:['No repeats yet'], datasets:[{ data:[0], backgroundColor: palette.amber }]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+    return;
+  }
+  charts.directorRating = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels: entries.map(e=>e[0]),
+      datasets:[{ data: entries.map(e=>Number(e[1].toFixed(2))), backgroundColor: palette.amber, borderRadius:4 }]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ min:0, max:5, grid:{color:palette.gridLine} },
+        y:{ grid:{display:false}, ticks:{color:palette.cream} }
+      }
+    }
+  });
+}
+
 function renderYearScatter(){
   destroy('yearScatter');
   charts.yearScatter = new Chart(document.getElementById('chartYearScatter'), {
@@ -827,7 +830,11 @@ function renderYearScatter(){
         tooltip:{callbacks:{ label:(ctx)=> `${ctx.raw.title}: ${ctx.raw.x}, ${ctx.raw.y}★` }}
       },
       scales:{
-        x:{ title:{display:true,text:'Release Year',color:palette.muted}, grid:{color:palette.gridLine} },
+        x:{
+          title:{display:true,text:'Release Year',color:palette.muted},
+          grid:{color:palette.gridLine},
+          ticks:{ callback: value => value, stepSize:2 }
+        },
         y:{ title:{display:true,text:'Rating',color:palette.muted}, min:0, max:5, grid:{color:palette.gridLine} }
       }
     }
