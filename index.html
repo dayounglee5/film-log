@@ -169,7 +169,7 @@
   .booth-head{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px;}
   form{
     display:grid;
-    grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
     gap:12px;
     margin-top:16px;
     align-items:end;
@@ -298,11 +298,31 @@
         <h2 class="section-title" style="margin-bottom:0;">Ticket Window</h2>
         <p class="section-desc" style="margin-bottom:0;">Log a film you just watched.</p>
       </div>
+      <div id="authArea"></div>
     </div>
+
+    <div id="loginPanel" style="display:none; max-width:320px; margin-top:16px;">
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" autocomplete="username" style="margin-bottom:10px;">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" style="margin-bottom:12px;">
+      <button id="loginBtn" type="button">Log In</button>
+      <div class="form-msg" id="loginMsg"></div>
+    </div>
+
+    <div id="addFormWrap" style="display:none; margin-top:16px;">
     <form id="addForm">
       <div>
         <label for="f-title">Title</label>
         <input id="f-title" type="text" placeholder="e.g. Paddington in Peru" required maxlength="120">
+      </div>
+      <div>
+        <label for="f-director">Director</label>
+        <input id="f-director" type="text" placeholder="e.g. Greta Gerwig" maxlength="120">
+      </div>
+      <div>
+        <label for="f-writer">Writer</label>
+        <input id="f-writer" type="text" placeholder="e.g. Greta Gerwig" maxlength="120">
       </div>
       <div>
         <label for="f-runtime">Runtime (min)</label>
@@ -335,6 +355,7 @@
       </div>
       <button type="submit">Add Film</button>
     </form>
+    </div>
     <div class="form-msg" id="formMsg"></div>
   </div>
 
@@ -363,13 +384,29 @@
       <h3>Films by Release Decade</h3>
       <div class="chart-wrap"><canvas id="chartDecade"></canvas></div>
     </div>
+    <div class="card">
+      <h3>Directors You Watch Most</h3>
+      <div class="chart-wrap"><canvas id="chartDirectors"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>How Current Is Your Taste</h3>
+      <div class="chart-wrap"><canvas id="chartRecency"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Rating vs. Release Year</h3>
+      <div class="chart-wrap"><canvas id="chartYearScatter"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Auteur vs. Collaborative</h3>
+      <div class="chart-wrap"><canvas id="chartAuteur"></canvas></div>
+    </div>
   </div>
 
   <h2 class="section-title">Full Reel</h2>
   <p class="section-desc">All logged films, most recent first.</p>
   <table>
     <thead>
-      <tr><th>Title</th><th>Watched</th><th>Released</th><th>Runtime</th><th>Rating</th><th></th></tr>
+      <tr><th>Title</th><th>Director</th><th>Watched</th><th>Released</th><th>Runtime</th><th>Rating</th><th></th></tr>
     </thead>
     <tbody id="tableBody"></tbody>
   </table>
@@ -382,58 +419,56 @@
 const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
 const MONTH_LABEL = m => m.charAt(0).toUpperCase()+m.slice(1);
 
-const SEED = [
-["Bugonia",119,4.6,2025,"january",1],
-["Sinners",137,4.5,2025,"january",2],
-["The Lobster",119,4.2,2015,"january",3],
-["Call Me By Your Name",132,4.2,2017,"january",4],
-["Good Time",101,4.1,2017,"january",5],
-["Bride Wars",89,3.8,2009,"january",6],
-["Zootopia 2",108,3.8,2025,"january",7],
-["Pineapple Express",112,3.2,2008,"january",8],
-["Perfect Blue",82,5.0,1997,"february",9],
-["Train Dreams",102,4.2,2025,"february",10],
-["Eternity",112,4.1,2026,"february",11],
-["Good Luck, Have Fun, Don't Die",135,3.8,2026,"february",12],
-["Bones and All",131,3.4,2022,"february",13],
-["Honey, Don't",90,2.8,2025,"february",14],
-["If I Had Legs I'd Kick You",113,4.9,2025,"march",15],
-["Sorry, Baby",104,4.9,2025,"march",16],
-["Sentimental Value",134,4.7,2025,"march",17],
-["Perfect Days",125,4.3,2023,"march",18],
-["Hoppers",105,3.9,2026,"march",19],
-["The King's Warden",116,2.8,2026,"march",20],
-["License to Wed",91,1.8,2007,"march",21],
-["Project Hail Mary",156,4.8,2026,"april",22],
-["Beautiful Boy",120,4.7,2018,"april",23],
-["The Drama",105,4.3,2026,"april",24],
-["Dune",156,3.6,2021,"april",25],
-["The Worst Person in the World",128,4.5,2021,"may",26],
-["Anatomy of a Fall",151,4.3,2023,"may",27],
-["Obsession",108,4.8,2026,"june",28],
-["Moonlight",111,4.7,2016,"june",29],
-["Am I Ok?",86,4.6,2022,"june",30],
-["20th Century Women",118,4.1,2016,"june",31],
-["Anora",139,3.8,2024,"june",32],
-["Hot Summer Nights",107,3.1,2017,"june",33],
-["Voicemails for Isabelle",119,2.8,2026,"june",34],
-["Under the Silverlake",139,3.4,2018,"june",35],
-["Once Upon a Time ... in Hollywood",161,4.5,2019,"july",36],
-["Little Women",135,4.3,2019,"july",37],
-["Soul",101,4.7,2020,"july",38],
-["Hamnet",125,4.5,2025,"july",39],
-["Gone Girl",149,4.6,2014,"july",40]
-].map(r => ({title:r[0], runtime:r[1], rating:r[2], yearReleased:r[3], monthWatched:r[4], watchOrder:r[5], id:'seed-'+r[5]}));
-
 let films = [];
 
 // ============================================
 // SUPABASE CONFIG — replace these two values
 // Find them in Supabase: Project Settings -> API
 // ============================================
-const SUPABASE_URL = 'https://eawzxcshuzcfyubxmrun.supabase.co';
+const SUPABASE_URL = 'https://eawzxcshuzcfyubxmrun.supabase.co/rest/v1/';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhd3p4Y3NodXpjZnl1YnhtcnVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNjQ0NzYsImV4cCI6MjA5OTc0MDQ3Nn0.4xP-tE2Rdp0ErL2XtbT8y4l3bntpMOyvO7DcL10d0D8';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let isLoggedIn = false;
+
+function renderAuthArea(){
+  const area = document.getElementById('authArea');
+  if(isLoggedIn){
+    area.innerHTML = `<button id="logoutBtn" type="button" style="background:transparent;border:1px solid var(--amber);color:var(--amber);">Log Out</button>`;
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+      await db.auth.signOut();
+    });
+    document.getElementById('loginPanel').style.display = 'none';
+    document.getElementById('addFormWrap').style.display = 'block';
+  } else {
+    area.innerHTML = `<button id="showLoginBtn" type="button" style="background:transparent;border:1px solid var(--teal-bright);color:var(--teal-bright);">Log In to Edit</button>`;
+    document.getElementById('showLoginBtn').addEventListener('click', ()=>{
+      const panel = document.getElementById('loginPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('loginPanel').style.display = 'none';
+    document.getElementById('addFormWrap').style.display = 'none';
+  }
+}
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('loginMsg');
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if(error){
+    msg.textContent = 'Login failed: ' + error.message;
+    msg.style.color = '#c0524a';
+  } else {
+    msg.textContent = '';
+  }
+});
+
+db.auth.onAuthStateChange((_event, session)=>{
+  isLoggedIn = !!session;
+  renderAuthArea();
+  renderTable();
+});
 
 const palette = {
   amber:'#e8a33d', amberFaint:'rgba(232,163,61,0.25)',
@@ -467,6 +502,8 @@ async function loadFilms(){
   films = data.map(row => ({
     id: row.id,
     title: row.title,
+    director: row.director || '',
+    writer: row.writer || '',
     runtime: row.runtime,
     rating: row.rating,
     yearReleased: row.year_released,
@@ -480,6 +517,8 @@ async function loadFilms(){
 async function addFilmToDb(film){
   const { error } = await db.from('films').insert({
     title: film.title,
+    director: film.director,
+    writer: film.writer,
     runtime: film.runtime,
     rating: film.rating,
     year_released: film.yearReleased,
@@ -507,6 +546,10 @@ function renderAll(){
   renderRatingDist();
   renderTop();
   renderDecade();
+  renderDirectors();
+  renderRecency();
+  renderYearScatter();
+  renderAuteur();
 }
 
 function renderStubs(){
@@ -529,12 +572,13 @@ function renderTable(){
   const sorted = films.slice().sort((a,b)=> (b.watchOrder||0)-(a.watchOrder||0));
   document.getElementById('tableBody').innerHTML = sorted.map(f => `
     <tr>
-      <td>${escapeHtml(f.title)}</td>
+      <td title="${f.writer ? 'Writer: '+escapeHtml(f.writer) : ''}">${escapeHtml(f.title)}</td>
+      <td>${escapeHtml(f.director || '—')}</td>
       <td>${MONTH_LABEL(f.monthWatched)}</td>
       <td>${f.yearReleased}</td>
       <td>${f.runtime}m</td>
       <td class="rating-pill">${f.rating.toFixed(1)}</td>
-      <td><button class="del-btn" data-id="${f.id}">Remove</button></td>
+      <td>${isLoggedIn ? `<button class="del-btn" data-id="${f.id}">Remove</button>` : ''}</td>
     </tr>
   `).join('');
   document.querySelectorAll('.del-btn').forEach(btn=>{
@@ -693,9 +737,145 @@ function renderDecade(){
   });
 }
 
+function renderDirectors(){
+  const counts = {};
+  films.forEach(f=>{
+    if(!f.director) return;
+    // films can list multiple directors separated by commas — credit each one
+    f.director.split(',').map(d=>d.trim()).filter(Boolean).forEach(name=>{
+      counts[name] = (counts[name]||0)+1;
+    });
+  });
+  const entries = Object.entries(counts)
+    .filter(([,c]) => c >= 2)
+    .sort((a,b)=> b[1]-a[1])
+    .slice(0,8);
+
+  destroy('directors');
+  const canvas = document.getElementById('chartDirectors');
+  if(entries.length === 0){
+    charts.directors = new Chart(canvas, {
+      type:'bar',
+      data:{ labels:['No repeats yet'], datasets:[{ data:[0], backgroundColor: palette.teal }]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+    return;
+  }
+  charts.directors = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels: entries.map(e=>e[0]),
+      datasets:[{ data: entries.map(e=>e[1]), backgroundColor: palette.teal, borderRadius:4 }]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ beginAtZero:true, ticks:{stepSize:1, color:palette.muted}, grid:{color:palette.gridLine} },
+        y:{ grid:{display:false}, ticks:{color:palette.cream} }
+      }
+    }
+  });
+}
+
+function renderRecency(){
+  const thisYear = new Date().getFullYear();
+  const buckets = [
+    { label:'This year', test: age => age <= 0 },
+    { label:'1-2 yrs ago', test: age => age >= 1 && age <= 2 },
+    { label:'3-5 yrs ago', test: age => age >= 3 && age <= 5 },
+    { label:'6-10 yrs ago', test: age => age >= 6 && age <= 10 },
+    { label:'10+ yrs ago', test: age => age > 10 }
+  ];
+  const counts = buckets.map(b => films.filter(f => b.test(thisYear - f.yearReleased)).length);
+
+  destroy('recency');
+  charts.recency = new Chart(document.getElementById('chartRecency'), {
+    type:'bar',
+    data:{
+      labels: buckets.map(b=>b.label),
+      datasets:[{ data: counts, backgroundColor: palette.amber, borderRadius:4, maxBarThickness:44 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ grid:{display:false} },
+        y:{ beginAtZero:true, ticks:{stepSize:1, color:palette.muted}, grid:{color:palette.gridLine} }
+      }
+    }
+  });
+}
+
+function renderYearScatter(){
+  destroy('yearScatter');
+  charts.yearScatter = new Chart(document.getElementById('chartYearScatter'), {
+    type:'scatter',
+    data:{
+      datasets:[{
+        data: films.map(f=>({x:f.yearReleased, y:f.rating, title:f.title})),
+        backgroundColor: palette.teal,
+        pointRadius:5,
+        pointHoverRadius:7
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{ label:(ctx)=> `${ctx.raw.title}: ${ctx.raw.x}, ${ctx.raw.y}★` }}
+      },
+      scales:{
+        x:{ title:{display:true,text:'Release Year',color:palette.muted}, grid:{color:palette.gridLine} },
+        y:{ title:{display:true,text:'Rating',color:palette.muted}, min:0, max:5, grid:{color:palette.gridLine} }
+      }
+    }
+  });
+}
+
+function renderAuteur(){
+  let auteurTotal=0, auteurCount=0, collabTotal=0, collabCount=0;
+  films.forEach(f=>{
+    if(!f.director || !f.writer) return;
+    const directors = f.director.split(',').map(d=>d.trim().toLowerCase()).filter(Boolean);
+    const writerLower = f.writer.toLowerCase();
+    const isAuteur = directors.some(d => d && writerLower.includes(d));
+    if(isAuteur){ auteurTotal += f.rating; auteurCount++; }
+    else { collabTotal += f.rating; collabCount++; }
+  });
+
+  const avgAuteur = auteurCount ? auteurTotal/auteurCount : 0;
+  const avgCollab = collabCount ? collabTotal/collabCount : 0;
+
+  destroy('auteur');
+  charts.auteur = new Chart(document.getElementById('chartAuteur'), {
+    type:'bar',
+    data:{
+      labels:[`Auteur (${auteurCount})`, `Collaborative (${collabCount})`],
+      datasets:[{
+        data:[Number(avgAuteur.toFixed(2)), Number(avgCollab.toFixed(2))],
+        backgroundColor:[palette.amber, palette.teal],
+        borderRadius:4,
+        maxBarThickness:70
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ grid:{display:false} },
+        y:{ min:0, max:5, grid:{color:palette.gridLine} }
+      }
+    }
+  });
+}
+
 document.getElementById('addForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const title = document.getElementById('f-title').value.trim();
+  const director = document.getElementById('f-director').value.trim();
+  const writer = document.getElementById('f-writer').value.trim();
   const runtime = parseFloat(document.getElementById('f-runtime').value);
   const rating = parseFloat(document.getElementById('f-rating').value);
   const yearReleased = parseInt(document.getElementById('f-year').value);
@@ -710,7 +890,7 @@ document.getElementById('addForm').addEventListener('submit', async (e)=>{
 
   const maxOrder = films.reduce((m,f)=>Math.max(m,f.watchOrder||0),0);
   const ok = await addFilmToDb({
-    title, runtime, rating, yearReleased, monthWatched,
+    title, director, writer, runtime, rating, yearReleased, monthWatched,
     watchOrder: maxOrder+1
   });
 
