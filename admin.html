@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Film Log Admin</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ---------- Design tokens (from the Figma file, "MacBook Pro 16" - 2") ---------- */
+  :root{
+    --page:#e7e7e7;        /* admin page background */
+    --panel:#e7e7e7;       /* inputs */
+    --card:#e1dbba;        /* form panel (cream, as in the "log a film" frame) */
+    --sage:#b7c9ae;
+    --brown:#542f1c;
+    --navy:#0e1e29;
+    --error:#9b2f28;
+    --success:#3b5a33;
+    --wrap:1438px;
+    --fun:'Instrument Sans', system-ui, sans-serif;
+    --serious:'Geist', system-ui, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{ margin:0; background:var(--page); color:var(--navy); font-family:var(--serious); font-size:15px; line-height:1.3; }
+  .wrap{ width:min(var(--wrap), calc(100% - 48px)); margin:0 auto; }
+
+  .hero{ text-align:center; padding:56px 24px 0; }
+  .hero h1{ margin:0; font-family:var(--fun); font-weight:700; font-size:48px; line-height:1.2; color:var(--brown); text-transform:capitalize; }
+  .tagline{ margin:4px 0 0; font-size:20px; color:var(--navy); }
+  .deco{ display:none; }
+
+  .admin-top{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:28px 0 0; }
+  .admin-top a{ color:var(--brown); font-weight:500; }
+
+  main{ padding-bottom:60px; }
+  .booth{ margin-top:32px; background:var(--card); border-radius:15px; padding:36px 36px 40px; }
+  .booth-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  .booth h2{ margin:0; font-family:var(--fun); font-weight:600; font-size:32px; line-height:1.2; color:var(--brown); }
+  #boothDesc{ margin:2px 0 0; color:var(--navy); }
+  #boothDesc:empty{ display:none; }
+  .booth label{ display:block; margin-bottom:6px; font-size:15px; line-height:1.2; color:var(--navy); }
+  #addFormWrap{ margin-top:30px; }
+  #addForm{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); column-gap:24px; row-gap:26px; }
+  .actions{ display:flex; align-items:center; align-self:end; gap:12px; flex-wrap:wrap; }
+  #loginPanel{ max-width:340px; margin-top:24px; }
+  #loginPanel input{ margin-bottom:16px; }
+
+  input, select{ width:100%; height:42px; padding:0 14px; background:var(--panel); color:var(--navy); border:none; border-radius:5px; font-family:var(--serious); font-size:15px; }
+  button{ height:34px; padding:0 20px; border:none; border-radius:10px; background:var(--sage); color:var(--navy); font-family:var(--serious); font-weight:500; font-size:15px; cursor:pointer; white-space:nowrap; }
+  button:hover{ filter:brightness(0.95); }
+  .btn-outline, .btn-ghost{ background:transparent; border:2px solid var(--brown); color:var(--brown); }
+  input:focus-visible, select:focus-visible, button:focus-visible{ outline:3px solid var(--brown); outline-offset:2px; }
+  .form-msg{ margin-top:16px; min-height:22px; font-size:15px; color:var(--success); }
+
+  .reel-title{ margin:56px 0 0; font-family:var(--fun); font-weight:600; font-size:32px; line-height:1.2; text-transform:capitalize; color:var(--navy); }
+  .reel-desc{ margin:4px 0 0; }
+  .filters{ margin-top:24px; display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; background:var(--sage); border-radius:15px; padding:28px 30px 29px; }
+  .filters .f-search{ flex:2 1 280px; }
+  .filters .f-item{ flex:1 1 170px; }
+  .filters label{ display:block; margin-bottom:11px; font-size:15px; line-height:10px; height:10px; color:var(--navy); }
+  .filters input, .filters select{ height:45px; border-radius:10px; }
+  .filters button{ margin-left:auto; margin-bottom:3px; height:38px; padding:0 29px; background:var(--card); border:none; color:var(--navy); }
+  .filter-count{ margin:12px 0 16px; min-height:20px; }
+
+  .table-scroll{ overflow-x:auto; padding-bottom:10px; }
+  table{ width:100%; border-collapse:collapse; min-width:980px; }
+  thead th{ text-align:left; padding:0 12px 12px; font-weight:400; color:var(--navy); border-bottom:1px solid var(--navy); white-space:nowrap; }
+  tbody td{ padding:12px; border-bottom:1px solid rgba(14,30,41,0.15); vertical-align:middle; }
+  tbody tr:hover{ background:rgba(14,30,41,0.05); }
+  .rating-pill{ font-family:var(--fun); font-weight:600; font-size:17px; color:var(--brown) !important; }
+  .empty-row td{ text-align:center; padding:26px 12px; }
+  .edit-btn, .del-btn{ height:auto; padding:3px 12px; font-size:15px; border-radius:8px; background:transparent; }
+  .edit-btn{ border:2px solid var(--brown); color:var(--brown); margin-right:6px; }
+  .del-btn{ border:2px solid var(--error); color:var(--error); }
+
+  @media (max-width:900px){ #addForm{ grid-template-columns:repeat(2, minmax(0,1fr)); } .grid-spacer{ display:none; } }
+  @media (max-width:600px){ .booth{ padding:26px 20px 30px; } #addForm{ grid-template-columns:1fr; } .hero h1{ font-size:34px; } }
+</style>
+</head>
+<body>
+
+<header class="hero admin-hero">
+  <img class="deco star-1" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAzIiBoZWlnaHQ9IjIxMSIgdmlld0JveD0iMCAwIDIwMyAyMTEiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik02OC4wMjUxIDguODY3QzY3LjgzNDIgMC41MDQwMSA3OC40NjQ5IC0zLjIzNTMzIDgzLjU1MTUgMy40MDU2TDEyMC43NTUgNTIuMDQ4OUMxMjEuODY0IDUzLjQ5NTMgMTIzLjQwMyA1NC41NTM2IDEyNS4xNTMgNTUuMDcyMkMxMjYuOTAyIDU1LjU5MDggMTI4Ljc3MiA1NS41NDMxIDEzMC40OTQgNTQuOTM2TDE4OC4zOCAzNC41NzQ2QzE5Ni4yODQgMzEuNzk0NyAyMDMuMTIyIDQwLjczNDIgMTk4LjM1NSA0Ny42MjU5TDE2My40NjkgOTguMDM1M0MxNjIuNDMgOTkuNTM3IDE2MS44OTQgMTAxLjMyOCAxNjEuOTM4IDEwMy4xNTFDMTYxLjk4MSAxMDQuOTc0IDE2Mi42MDIgMTA2LjczNiAxNjMuNzExIDEwOC4xODRMMjAwLjkxNSAxNTYuODI3QzIwNi4wMDIgMTYzLjQ2OCAxOTkuNTc2IDE3Mi43MjEgMTkxLjU2IDE3MC4zMzhMMTMyLjc5OCAxNTIuODY5QzEzMS4wNDggMTUyLjM0OSAxMjkuMTc4IDE1Mi4zOTUgMTI3LjQ1NCAxNTMuMDAxQzEyNS43MzEgMTUzLjYwOCAxMjQuMjQzIDE1NC43NDMgMTIzLjIwNSAxNTYuMjQ0TDg4LjI5NTUgMjA2LjY2MkM4My41NDAyIDIxMy41NDkgNzIuNzMzMiAyMTAuMzQ1IDcyLjU0MjIgMjAxLjk4Mkw3MS4xMDA3IDE0MC43NTlDNzEuMDU5MyAxMzguOTM2IDcwLjQ0MDUgMTM3LjE3NCA2OS4zMzMxIDEzNS43MjVDNjguMjI1NyAxMzQuMjc2IDY2LjY4NjYgMTMzLjIxNSA2NC45MzY1IDEzMi42OTRMNi4xNzQ0NiAxMTUuMjI1Qy0xLjg1NzMyIDExMi44MzUgLTIuMTIxMzMgMTAxLjU4MyA1Ljc4MTc2IDk4LjgwMzRMNjMuNjY3OCA3OC40NDIxQzY1LjM5MDkgNzcuODM3NCA2Ni44Nzg4IDc2LjcwNCA2Ny45MTgzIDc1LjIwNDNDNjguOTU3OSA3My43MDQ3IDY5LjQ5NTggNzEuOTE1NyA2OS40NTUgNzAuMDkzN0w2OC4wMjUxIDguODY3WiIgZmlsbD0iI0I3QzlBRSIvPgo8L3N2Zz4K" width="203" height="211" alt="">
+  <img class="deco star-2" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTY1IiBoZWlnaHQ9IjE2NCIgdmlld0JveD0iMCAwIDE2NSAxNjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xMTEuOTYyIDEuOTEwODZDMTE2LjcyMiAtMi42NDA1MSAxMjQuNTQgMS41NTMwMyAxMjMuMzgxIDguMDM1NjRMMTE0Ljg2MSA1NS40ODczQzExNC42MDkgNTYuODk5NyAxMTQuODExIDU4LjM1NjQgMTE1LjQzOSA1OS42NDg2QzExNi4wNjYgNjAuOTQwOSAxMTcuMDg3IDYyLjAwMjMgMTE4LjM1NCA2Mi42ODFMMTYwLjkyNCA4NS41MTU2QzE2Ni43MzYgODguNjMzMiAxNjUuMTcxIDk3LjM1NDMgMTU4LjYzNCA5OC4yNDI3TDExMC44MTEgMTA0LjczMUMxMDkuMzg3IDEwNC45MjUgMTA4LjA2MSAxMDUuNTY0IDEwNy4wMjQgMTA2LjU1N0MxMDUuOTg4IDEwNy41NTEgMTA1LjI5NCAxMDguODQ3IDEwNS4wNDEgMTEwLjI2TDk2LjUyMTIgMTU3LjcxMkM5NS4zNjIgMTY0LjE5NCA4Ni41NzI1IDE2NS4zNzMgODMuNzAxIDE1OS40NDhMNjIuNjU0NCAxMTYuMDE5QzYyLjAyNzkgMTE0LjcyNSA2MS4wMDc4IDExMy42NjIgNTkuNzQwNSAxMTIuOTgzQzU4LjQ3MzEgMTEyLjMwMyA1Ny4wMjM1IDExMi4wNDEgNTUuNTk5NCAxMTIuMjM0TDcuNzU5NDggMTE4LjcxM0MxLjIzMTI0IDExOS42MDYgLTIuNjQ0NDIgMTExLjYyMyAyLjExNTA5IDEwNy4wNzJMMzYuOTM0NiA3My43Mjc2QzM3Ljk3MjMgNzIuNzM1NSAzOC42NjgyIDcxLjQ0IDM4LjkyMjQgNzAuMDI3QzM5LjE3NjcgNjguNjE0IDM4Ljk3NjIgNjcuMTU2MSAzOC4zNDk3IDY1Ljg2MjNMMTcuMzAzMSAyMi40MzI0QzE0LjQyNzYgMTYuNDk1MiAyMC44Mjc1IDEwLjM2NzUgMjYuNjM5NSAxMy40ODVMNjkuMjA5MiAzNi4zMTk2QzcwLjQ3NTYgMzcgNzEuOTI0NCAzNy4yNjMxIDczLjM0OCAzNy4wNzExQzc0Ljc3MTYgMzYuODc5IDc2LjA5NyAzNi4yNDE4IDc3LjEzNDQgMzUuMjUwN0wxMTEuOTYyIDEuOTEwODZaIiBmaWxsPSIjQjdDOUFFIi8+Cjwvc3ZnPgo=" width="165" height="164" alt="">
+  <h1>Film Log Admin</h1>
+  <p class="tagline">log, edit &amp; remove films</p>
+</header>
+
+<main class="wrap">
+  <div class="admin-top"><a href="index.html">&larr; Back to dashboard</a><div id="authArea"></div></div>
+
+  <section class="booth" id="loginBooth">
+    <h2>Sign In</h2>
+    <div id="loginPanel">
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" autocomplete="username">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password">
+      <button id="loginBtn" type="button">Log In</button>
+      <div class="form-msg" id="loginMsg"></div>
+    </div>
+  </section>
+
+  <div id="adminArea" style="display:none;">
+  <section class="booth">
+    <div class="booth-head">
+      <div>
+        <h2 id="boothTitle">Log a Film!</h2>
+        <p id="boothDesc"></p>
+      </div>
+    </div>
+    <div id="addFormWrap">
+      <form id="addForm">
+        <div>
+          <label for="f-title">Title</label>
+          <input id="f-title" type="text" required maxlength="120">
+        </div>
+        <div>
+          <label for="f-runtime">Runtime (min)</label>
+          <input id="f-runtime" type="number" min="1" max="600" required>
+        </div>
+        <div>
+          <label for="f-year">Year Released</label>
+          <input id="f-year" type="number" min="1900" max="2100" required>
+        </div>
+
+        <div>
+          <label for="f-director">Director(s)</label>
+          <input id="f-director" type="text" maxlength="120">
+        </div>
+        <div>
+          <label for="f-writer">Writer(s)</label>
+          <input id="f-writer" type="text" maxlength="120">
+        </div>
+        <div>
+          <label for="f-genre">Genre</label>
+          <select id="f-genre" required></select>
+        </div>
+
+        <div>
+          <label for="f-rating">My Rating</label>
+          <input id="f-rating" type="number" min="0" max="5" step="0.1" placeholder="0 – 5" required>
+        </div>
+        <div>
+          <label for="f-month">Month Watched</label>
+          <select id="f-month" required>
+            <option value="january">January</option>
+            <option value="february">February</option>
+            <option value="march">March</option>
+            <option value="april">April</option>
+            <option value="may">May</option>
+            <option value="june">June</option>
+            <option value="july">July</option>
+            <option value="august">August</option>
+            <option value="september">September</option>
+            <option value="october">October</option>
+            <option value="november">November</option>
+            <option value="december">December</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button type="submit" id="submitBtn">Add Film</button>
+          <button type="button" id="cancelEditBtn" class="btn-ghost" style="display:none;">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div class="form-msg" id="formMsg"></div>
+  </section>
+
+  <h2 class="reel-title">Complete film reel</h2>
+  <p class="reel-desc">Use Edit to change a film or Remove to delete it.</p>
+
+  <div class="filters">
+    <div class="f-search">
+      <label for="flt-search">Search</label>
+      <input id="flt-search" type="search" placeholder="Title, director, writer, or genre" autocomplete="off">
+    </div>
+    <div class="f-item">
+      <label for="flt-month">Month Watched</label>
+      <select id="flt-month">
+        <option value="">All months</option>
+        <option value="january">January</option>
+        <option value="february">February</option>
+        <option value="march">March</option>
+        <option value="april">April</option>
+        <option value="may">May</option>
+        <option value="june">June</option>
+        <option value="july">July</option>
+        <option value="august">August</option>
+        <option value="september">September</option>
+        <option value="october">October</option>
+        <option value="november">November</option>
+        <option value="december">December</option>
+      </select>
+    </div>
+    <div class="f-item">
+      <label for="flt-genre">Genre</label>
+      <select id="flt-genre"><option value="">All genres</option></select>
+    </div>
+    <div class="f-item">
+      <label for="flt-rating">Minimum Rating</label>
+      <select id="flt-rating">
+        <option value="">Any rating</option>
+        <option value="4.5">4.5 and up</option>
+        <option value="4">4.0 and up</option>
+        <option value="3.5">3.5 and up</option>
+        <option value="3">3.0 and up</option>
+        <option value="2">2.0 and up</option>
+      </select>
+    </div>
+    <button type="button" id="clearFiltersBtn" class="btn-ghost">Clear</button>
+  </div>
+  <div class="filter-count" id="filterCount"></div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Title</th><th>Director</th><th>Writer</th><th>Genre</th><th>Watched</th><th>Released</th><th>Runtime</th><th>Rating</th><th></th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  </div>
+</main>
+
+<script>
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+const MONTH_LABEL = m => m.charAt(0).toUpperCase()+m.slice(1);
+
+let films = [];
+
+// ============================================
+// SUPABASE CONFIG — paste your Project URL + publishable key
+// Find them in Supabase: Project Settings -> API
+// ============================================
+const SUPABASE_URL = 'https://eawzxcshuzcfyubxmrun.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhd3p4Y3NodXpjZnl1YnhtcnVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNjQ0NzYsImV4cCI6MjA5OTc0MDQ3Nn0.4xP-tE2Rdp0ErL2XtbT8y4l3bntpMOyvO7DcL10d0D8';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+
+
+const palette = {
+  amber:'#70472e', amberFaint:'rgba(112,71,46,0.22)',    /* graph color 2 (brown)      */
+  teal:'#16261c',  tealFaint:'rgba(22,38,28,0.25)',      /* graph color 1 (dark green) */
+  cream:'#121e28', muted:'#121e28',                      /* sub font color (chart text) */
+  red:'#9b2f28', success:'#3b5a33',
+  gridLine:'rgba(18,30,40,0.12)',
+  /* doughnut: the two graph colors, then softer versions of each */
+  series:['#16261c','#70472e','#47534b','#8a6c59']
+};
+
+
+
+let isLoggedIn = false;
+let editingId = null;
+
+function renderAuthArea(){
+  const area = document.getElementById('authArea');
+  document.getElementById('loginBooth').style.display = isLoggedIn ? 'none' : 'block';
+  document.getElementById('adminArea').style.display = isLoggedIn ? 'block' : 'none';
+  if(isLoggedIn){
+    area.innerHTML = `<button id="logoutBtn" type="button" class="btn-outline">Log Out</button>`;
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{ await db.auth.signOut(); });
+  } else {
+    area.innerHTML = '';
+    if(editingId !== null) stopEdit();
+  }
+}
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('login-password').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('loginMsg');
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if(error){ msg.textContent = 'Login failed: ' + error.message; msg.style.color = palette.red; }
+  else msg.textContent = '';
+}
+
+db.auth.onAuthStateChange((_event, session)=>{
+  isLoggedIn = !!session;
+  renderAuthArea();
+  if(isLoggedIn) loadFilms();
+});
+
+async function loadFilms(){
+  const { data, error } = await db
+    .from('films')
+    .select('*')
+    .order('watch_order', { ascending: true });
+
+  if(error){
+    console.error('Error loading films from Supabase:', error);
+    document.getElementById('formMsg').textContent =
+      'Could not load films. Check your SUPABASE_URL / SUPABASE_ANON_KEY.';
+    document.getElementById('formMsg').style.color = palette.red;
+    films = [];
+    renderTable();
+    return;
+  }
+
+  // Map database column names (snake_case) to the field names the charts use
+  films = data.map(row => ({
+    id: row.id,
+    title: row.title,
+    director: row.director || '',
+    writer: row.writer || '',
+    genre: row.genre || '',
+    runtime: row.runtime,
+    rating: row.rating,
+    yearReleased: row.year_released,
+    monthWatched: row.month_watched,
+    watchOrder: row.watch_order
+  }));
+
+  populateGenreFilter();
+  renderTable();
+}
+
+async function addFilmToDb(film){
+  const { error } = await db.from('films').insert({
+    title: film.title,
+    director: film.director,
+    writer: film.writer,
+    genre: film.genre,
+    runtime: film.runtime,
+    rating: film.rating,
+    year_released: film.yearReleased,
+    month_watched: film.monthWatched,
+    watch_order: film.watchOrder
+  });
+  if(error){
+    console.error('Error adding film:', error);
+    return false;
+  }
+  return true;
+}
+
+async function updateFilmInDb(id, film){
+  const { data, error } = await db.from('films').update({
+    title: film.title,
+    director: film.director,
+    writer: film.writer,
+    genre: film.genre,
+    runtime: film.runtime,
+    rating: film.rating,
+    year_released: film.yearReleased,
+    month_watched: film.monthWatched
+  }).eq('id', id).select();
+  if(error){
+    console.error('Error updating film:', error);
+    return false;
+  }
+  // If the update policy is missing, Supabase returns no error but changes 0 rows
+  if(!data || data.length === 0){
+    console.error('Update changed 0 rows. Did you run add_update_policy.sql in Supabase?');
+    return false;
+  }
+  return true;
+}
+
+async function deleteFilmFromDb(id){
+  const { data, error } = await db.from('films').delete().eq('id', id).select();
+  if(error){ console.error('Error deleting film:', error); return false; }
+  // If the delete policy is missing, Supabase returns no error but removes 0 rows
+  if(!data || data.length === 0){
+    console.error('Delete removed 0 rows. Did you run lockdown_policies.sql in Supabase, and are you signed in?');
+    return false;
+  }
+  return true;
+}
+
+const BASE_GENRES = ['Adventure','Animation','Comedy','Crime','Drama','Historical','Horror','Musical','Mystery','Romance','Sci-Fi','Thriller'];
+function populateGenreForm(extra){
+  const sel = document.getElementById('f-genre');
+  const cur = sel.value;
+  const all = [...new Set([...BASE_GENRES, ...films.map(f=>f.genre).filter(Boolean), ...(extra?[extra]:[])])].sort();
+  sel.innerHTML = '<option value="" disabled selected>Select…</option>' + all.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  if(all.includes(cur)) sel.value = cur;
+}
+
+function populateGenreFilter(){
+  populateGenreForm();
+  const sel = document.getElementById('flt-genre');
+  const cur = sel.value;
+  const genres = [...new Set(films.map(f=>f.genre).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All genres</option>' + genres.map(g=>`<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  if(genres.includes(cur)) sel.value = cur;
+}
+
+function getFilteredFilms(){
+  const q = document.getElementById('flt-search').value.trim().toLowerCase();
+  const month = document.getElementById('flt-month').value;
+  const genre = document.getElementById('flt-genre').value;
+  const minRating = parseFloat(document.getElementById('flt-rating').value);
+  return films.filter(f => {
+    if(q){
+      const haystack = `${f.title} ${f.director} ${f.writer} ${f.genre}`.toLowerCase();
+      if(!haystack.includes(q)) return false;
+    }
+    if(month && f.monthWatched !== month) return false;
+    if(genre && f.genre !== genre) return false;
+    if(!isNaN(minRating) && f.rating < minRating) return false;
+    return true;
+  });
+}
+
+function renderTable(){
+  const filtered = getFilteredFilms();
+  const sorted = filtered.slice().sort((a,b)=> (b.watchOrder||0)-(a.watchOrder||0));
+  const tbody = document.getElementById('tableBody');
+
+  if(sorted.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No films match these filters.</td></tr>`;
+  } else {
+    tbody.innerHTML = sorted.map(f => `
+    <tr>
+      <td>${escapeHtml(f.title)}</td>
+      <td>${escapeHtml(f.director || '—')}</td>
+      <td>${escapeHtml(f.writer || '—')}</td>
+      <td>${escapeHtml(f.genre || '—')}</td>
+      <td>${MONTH_LABEL(f.monthWatched)}</td>
+      <td>${f.yearReleased}</td>
+      <td>${f.runtime}m</td>
+      <td class="rating-pill">${f.rating.toFixed(1)}</td>
+      <td style="white-space:nowrap;">${isLoggedIn ? `<button class="edit-btn" data-id="${f.id}">Edit</button><button class="del-btn" data-id="${f.id}">Remove</button>` : ''}</td>
+    </tr>
+  `).join('');
+  }
+
+  document.getElementById('filterCount').textContent =
+    filtered.length === films.length
+      ? `${films.length} films`
+      : `Showing ${filtered.length} of ${films.length} films`;
+
+  document.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      if(editingId !== null && String(editingId) === String(id)) stopEdit();
+      const film = films.find(x => String(x.id) === String(id));
+      if(!confirm(`Remove "${film ? film.title : 'this film'}" from the reel?`)) return;
+      const ok = await deleteFilmFromDb(id);
+      const msg = document.getElementById('formMsg');
+      if(!ok){
+        msg.textContent = 'Could not remove that film. Check the console (you may need to run lockdown_policies.sql in Supabase).';
+        msg.style.color = palette.red;
+        window.scrollTo({ top:0, behavior:'smooth' });
+        return;
+      }
+      await loadFilms();
+      msg.textContent = `"${film ? film.title : 'Film'}" removed.`;
+      msg.style.color = palette.success;
+      setTimeout(()=>{ msg.textContent=''; }, 3000);
+    });
+  });
+  document.querySelectorAll('.edit-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> startEdit(btn.dataset.id));
+  });
+}
+
+function startEdit(id){
+  const f = films.find(x => String(x.id) === String(id));
+  if(!f) return;
+  editingId = f.id;
+  document.getElementById('f-title').value = f.title;
+  document.getElementById('f-director').value = f.director || '';
+  document.getElementById('f-writer').value = f.writer || '';
+  populateGenreForm(f.genre);
+  document.getElementById('f-genre').value = f.genre || '';
+  document.getElementById('f-runtime').value = f.runtime;
+  document.getElementById('f-rating').value = f.rating;
+  document.getElementById('f-year').value = f.yearReleased;
+  document.getElementById('f-month').value = f.monthWatched;
+  document.getElementById('boothTitle').textContent = 'Edit Film';
+  document.getElementById('boothDesc').textContent = `Editing "${f.title}". Save to apply your changes.`;
+  document.getElementById('submitBtn').textContent = 'Save Changes';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+  document.getElementById('formMsg').textContent = '';
+  document.getElementById('addFormWrap').scrollIntoView({ behavior:'smooth', block:'center' });
+  document.getElementById('f-title').focus({ preventScroll:true });
+}
+
+function stopEdit(){
+  editingId = null;
+  document.getElementById('addForm').reset();
+  document.getElementById('boothTitle').textContent = 'Log a Film!';
+  document.getElementById('boothDesc').textContent = '';
+  document.getElementById('submitBtn').textContent = 'Add Film';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('addForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const title = document.getElementById('f-title').value.trim();
+  const director = document.getElementById('f-director').value.trim();
+  const writer = document.getElementById('f-writer').value.trim();
+  const genre = document.getElementById('f-genre').value;
+  const runtime = parseFloat(document.getElementById('f-runtime').value);
+  const rating = parseFloat(document.getElementById('f-rating').value);
+  const yearReleased = parseInt(document.getElementById('f-year').value);
+  const monthWatched = document.getElementById('f-month').value;
+  const msg = document.getElementById('formMsg');
+
+  if(!title || !genre || isNaN(runtime) || isNaN(rating) || isNaN(yearReleased)){
+    msg.textContent = 'Please fill in every field.';
+    msg.style.color = palette.red;
+    return;
+  }
+
+  if(editingId !== null){
+    const ok = await updateFilmInDb(editingId, {
+      title, director, writer, genre, runtime, rating, yearReleased, monthWatched
+    });
+    if(!ok){
+      msg.textContent = 'Could not save changes. Check the console (you may need to run add_update_policy.sql in Supabase).';
+      msg.style.color = palette.red;
+      return;
+    }
+    stopEdit();
+    await loadFilms();
+    msg.textContent = `"${title}" updated.`;
+    msg.style.color = palette.success;
+    setTimeout(()=>{ msg.textContent=''; }, 3000);
+    return;
+  }
+
+  const maxOrder = films.reduce((m,f)=>Math.max(m,f.watchOrder||0),0);
+  const ok = await addFilmToDb({
+    title, director, writer, genre, runtime, rating, yearReleased, monthWatched,
+    watchOrder: maxOrder+1
+  });
+
+  if(!ok){
+    msg.textContent = 'Something went wrong saving that film. Check the console.';
+    msg.style.color = palette.red;
+    return;
+  }
+
+  await loadFilms();
+  e.target.reset();
+  msg.textContent = `"${title}" added to the reel.`;
+  msg.style.color = palette.success;
+  setTimeout(()=>{ msg.textContent=''; }, 3000);
+});
+
+document.getElementById('cancelEditBtn').addEventListener('click', ()=>{
+  stopEdit();
+  document.getElementById('formMsg').textContent = '';
+});
+
+// Filters only redraw the table (not the charts), so typing stays snappy
+['flt-search','flt-month','flt-genre','flt-rating'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderTable);
+});
+document.getElementById('clearFiltersBtn').addEventListener('click', ()=>{
+  document.getElementById('flt-search').value = '';
+  document.getElementById('flt-month').value = '';
+  document.getElementById('flt-genre').value = '';
+  document.getElementById('flt-rating').value = '';
+  renderTable();
+});
+
+db.auth.getSession().then(({data})=>{ isLoggedIn = !!data.session; renderAuthArea(); if(isLoggedIn) loadFilms(); });
+</script>
+
+</body>
+</html>
